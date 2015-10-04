@@ -420,7 +420,7 @@ class fsAccessWrapper implements AjxpWrapper
 
     public function mkdir($path, $mode, $options)
     {
-        return mkdir($this->initPath($path, "file"), $mode);
+        return mkdir($this->initPath($path, "file"), $mode, $options);
     }
 
     /**

@@ -250,6 +250,7 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
         $newArgs = RecycleBinManager::filterActions($action, $selection, $dir, $httpVars);
         if(isSet($newArgs["action"])) $action = $newArgs["action"];
         if(isSet($newArgs["dest"])) $httpVars["dest"] = SystemTextEncoding::toUTF8($newArgs["dest"]);//Re-encode!
+
          // FILTER DIR PAGINATION ANCHOR
         $page = null;
         if (isSet($dir) && strstr($dir, "%23")!==false) {
@@ -484,24 +485,52 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
                 if($loggedUser != null && !$loggedUser->canWrite(ConfService::getCurrentRepositoryId())){
                     throw new AJXP_Exception("You are not allowed to write", 207);
                 }
-                $success = $error = array();
+                $success = $errors = array();
                 $dest = AJXP_Utils::decodeSecureMagic($httpVars["dest"]);
                 $this->filterUserSelectionToHidden(array($httpVars["dest"]));
+
+                if(!isSet($nodesDiffs)) $nodesDiffs = $this->getNodesDiffArray();
+
+		// We first create the dir if it doesn't exist   
+		if (!is_dir($this->urlBase.$dest)) {
+
+			//Creating the dir (recursively if needed)
+			$error = $this->mkDir('', ltrim($dest, "\/"), true);
+                    
+			if (isSet($error)) {
+				$errors[] = $error;
+				continue;
+			}
+
+			// add recursively the dirs created to the nodesDiff for gui
+			$tree = "";
+			foreach (explode("/", ltrim($dest, "/")) as $newDir) {
+				$tree .= "/" . $newDir;
+				$newPath = $this->urlBase.$tree;
+				$newNode = new AJXP_Node($newPath);
+				$nodesDiffs["ADD"][] = $newNode;
+			}
+		}
+
+		if (!is_dir($this->urlBase.$dest)) {
+			$errors[] = $mess[38]." ".$dest." ".$mess[99];
+			return ;
+		}
+
                 if ($selection->inZip()) {
                     // Set action to copy anycase (cannot move from the zip).
                     $action = "copy";
-                    $this->extractArchive($dest, $selection, $error, $success);
+                    $this->extractArchive($dest, $selection, $errors, $success);
                 } else {
                     $move = ($action == "move" ? true : false);
                     if ($move && isSet($httpVars["force_copy_delete"])) {
                         $move = false;
                     }
-                    $this->copyOrMove($dest, $selection->getFiles(), $error, $success, $move);
-
+                    $this->copyOrMove($dest, $selection->getFiles(), $errors, $success, $move);
                 }
 
-                if (count($error)) {
-                    throw new AJXP_Exception(SystemTextEncoding::toUTF8(join("\n", $error)));
+                if (count($errors)) {
+                    throw new AJXP_Exception(SystemTextEncoding::toUTF8(join("\n", $errors)));
                 } else {
                     if (isSet($httpVars["force_copy_delete"])) {
                         $errorMessage = $this->delete($selection->getFiles(), $logMessages);
@@ -512,7 +541,6 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
                     }
                     $logMessage = join("\n", $success);
                 }
-                if(!isSet($nodesDiffs)) $nodesDiffs = $this->getNodesDiffArray();
                 // Assume new nodes are correctly created
                 $selectedItems = $selection->getFiles();
                 foreach ($selectedItems as $selectedPath) {
@@ -613,6 +641,7 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
                         $errors[] = $e->getMessage();
                         continue;
                     }
+
                     $error = $this->mkDir($parentDir, $basename, isSet($httpVars["ignore_exists"])?true:false);
                     if (isSet($error)) {
                         //throw new AJXP_Exception($error);
@@ -1660,10 +1689,13 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
     {
         $this->logDebug("CopyMove", array("dest"=>$this->addSlugToPath($destDir), "selection" => $this->addSlugToPath($selectedFiles)));
         $mess = ConfService::getMessages();
+	
         if (!$this->isWriteable($this->urlBase.$destDir)) {
-            $error[] = $mess[38]." ".$destDir." ".$mess[99];
-            return ;
+		$error[] = $mess[38]." ".$destDir." ".$mess[99];
+		return ;
         }
+
+	
         $repoData = array(
             'base_url' => $this->urlBase,
             'wrapper_name' => $this->wrapperClassName,
@@ -1756,7 +1788,8 @@ class fsAccessDriver extends AbstractAccessDriver implements AjxpWrapperProvider
             if ($dirMode & 0004) $dirMode |= 0001; // Other are allowed to read, allow to list the directory
         }
         $old = umask(0);
-        mkdir($this->urlBase."$crtDir/$newDirName", $dirMode);
+
+        mkdir($this->urlBase."$crtDir/$newDirName", $dirMode, true);
         umask($old);
         $newNode = new AJXP_Node($this->urlBase.$crtDir."/".$newDirName);
         $newNode->setLeaf(false);
