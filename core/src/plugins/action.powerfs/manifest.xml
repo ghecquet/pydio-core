@@ -10,9 +10,6 @@
     <server_settings>
         <global_param name="ZIP_PATH" type="string" label="CONF_MESSAGE[Zip path]"
                       description="CONF_MESSAGE[Path of the zip utilitary on the command line]" default="zip"/>
-		<global_param name="ZIP_TYPE" type="select"
-                      choices="zip|CONF_MESSAGE[Zip],winrar|CONF_MESSAGE[WinRAR],7zip|CONF_MESSAGE[7Zip],other|CONF_MESSAGE[Other]"
-                      label="CONF_MESSAGE[Zip Type]" description="CONF_MESSAGE[Type of the ZIP Tool being used]" default="zip" editable="false"/>
     </server_settings>
     <registry_contributions>
         <actions>
